@@ -130,6 +130,10 @@ public:
 
     Initiator *initiator() { return node_; }    
 
+    int set_total_tasks(int64_t total_tasks);
+
+    int register_current_thread();
+
 private:
     
     enum DirtyState {
@@ -357,6 +361,8 @@ private:
         }
     }
 
+    void set_cached_total_tasks(int64_t total_tasks);
+
     void global_lock();
 
     void global_unlock();
@@ -449,6 +455,26 @@ public:
     }
 
     Initiator *initiator() { return node_; }
+
+    int set_total_tasks(int64_t total_tasks) {
+        for (auto &shard : shard_list_) {
+            int rc = shard->set_total_tasks(total_tasks);
+            if (rc) {
+                return rc;
+            }
+        }
+        return 0;
+    }
+
+    int register_current_thread() {
+        for (auto &shard : shard_list_) {
+            int rc = shard->register_current_thread();
+            if (rc) {
+                return rc;
+            }
+        }
+        return 0;
+    }
 
 private:
     Initiator *node_;

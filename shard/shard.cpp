@@ -166,6 +166,40 @@ int RemoteShard::init_task(int thread, int task, uint64_t total_tasks) {
     return 0;
 }
 
+void RemoteShard::set_cached_total_tasks(int64_t total_tasks) {
+    for (int i = 0; i < kMaxThreads; ++i) {
+        for (int j = 0; j < kMaxTasksPerThread; ++j) {
+            if (tl_data_[i][j].hash_table) {
+                tl_data_[i][j].hash_table->tasks = total_tasks;
+            }
+        }
+    }
+}
+
+int RemoteShard::set_total_tasks(int64_t total_tasks) {
+    TaskLocal &tl = tl_data_[GetThreadID()][GetTaskID()];
+    GlobalAddress addr = ht_addr_ + offsetof(HashTable, tasks);
+    addr.node = 0;
+    *tl.cas_buf = total_tasks;
+    int rc = node_->write(tl.cas_buf, addr, sizeof(uint64_t), Initiator::Option::Sync);
+    assert(!rc);
+    set_cached_total_tasks(total_tasks);
+    return 0;
+}
+
+int RemoteShard::register_current_thread() {
+    TaskLocal &tl = tl_data_[GetThreadID()][GetTaskID()];
+    GlobalAddress addr = ht_addr_ + offsetof(HashTable, tasks);
+    addr.node = 0;
+    int rc = node_->fetch_and_add(tl.cas_buf, addr, 1, Initiator::Option::Sync);
+    assert(!rc);
+    int64_t total_tasks = static_cast<int64_t>(*tl.cas_buf + 1);
+    rc = node_->read(tl.hash_table, ht_addr_, sizeof(HashTable), Initiator::Option::Sync);
+    assert(!rc);
+    set_cached_total_tasks(total_tasks);
+    return 0;
+}
+
 int64_t RemoteShard::tot_balls() {
     TaskLocal &tl = tl_data_[GetThreadID()][GetTaskID()];
     return tl.hash_table->lv1_balls + tl.hash_table->lv2_balls + tl.hash_table->lv3_balls;
@@ -2317,7 +2351,7 @@ int RemoteShard::read_block(const std::string &key, std::string &value, Slot &sl
 
     const char *block_key = get_kv_block_key(block);
     const char *block_value = get_kv_block_value(block);
-    if (strncmp(block_key, key.c_str(), block->key_len) != 0) {
+    if (block->key_len != key.size() || memcmp(block_key, key.data(), block->key_len) != 0) {
         return ENOENT;
     }
 
@@ -2332,8 +2366,8 @@ int RemoteShard::write_block(const std::string &key, const std::string &value, u
     assert(addr != NULL_GLOBAL_ADDRESS);
     block->key_len = key.size();
     block->value_len = value.size();
-    strncpy(get_kv_block_key(block), key.c_str(), block->key_len);
-    strncpy(get_kv_block_value(block), value.c_str(), block->value_len);
+    memcpy(get_kv_block_key(block), key.data(), block->key_len);
+    memcpy(get_kv_block_value(block), value.data(), block->value_len);
     update_kv_block_crc32(block, block_len);
     int rc = node_->write(block, addr, block_len);
     assert(!rc);
@@ -2353,8 +2387,8 @@ int RemoteShard::write_block(const std::string &key, const std::string &value, u
     assert(addr != NULL_GLOBAL_ADDRESS);
     block->key_len = key.size();
     block->value_len = value.size();
-    strncpy(get_kv_block_key(block), key.c_str(), block->key_len);
-    strncpy(get_kv_block_value(block), value.c_str(), block->value_len);
+    memcpy(get_kv_block_key(block), key.data(), block->key_len);
+    memcpy(get_kv_block_value(block), value.data(), block->value_len);
     update_kv_block_crc32(block, block_len);
     int rc = node_->write(block, addr, block_len);
     assert(!rc);
