@@ -56,7 +56,7 @@ RemoteShard::RemoteShard(JsonConfig config, int max_threads) : config_(config), 
     // GlobalAddress addr = ht_addr_ + (offsetof(HashTable, tasks));
     // int rc = node_->fetch_and_add(tmp, addr, (threads ) * tasks , Initiator::Option::Sync);
     // assert(!rc);
-    
+
     local_lock_table_ = new LocalLockTable();
 }
 
@@ -76,7 +76,7 @@ RemoteShard::RemoteShard(JsonConfig config, int max_threads, Initiator *node, in
     ht_addr_.node = node_id_;
     old_data_buf_ = (char *) node_->alloc_cache(DATA_BLOCK);
     new_data_buf_ = (char *) node_->alloc_cache(DATA_BLOCK);
-    
+
     uint64_t clients = config.get("client_num").get_uint64();
     uint64_t threads = config.get("nr_threads").get_uint64();
     uint64_t tasks = config.get("tasks_per_thread").get_uint64();
@@ -117,14 +117,14 @@ RemoteShard::RemoteShard(JsonConfig config, Initiator *node, int node_id) :
     }
     old_data_buf_ = (char *) node_->alloc_cache(DATA_BLOCK);
     new_data_buf_ = (char *) node_->alloc_cache(DATA_BLOCK);
-    
+
     uint64_t clients = config.get("client_num").get_uint64();
     uint64_t threads = config.get("nr_threads").get_uint64();
     uint64_t tasks = config.get("tasks_per_thread").get_uint64();
     if (init_task(GetThreadID(), GetTaskID(), clients * threads * tasks)) {
         exit(EXIT_FAILURE);
     }
-    
+
     local_lock_table_ = new LocalLockTable();
 }
 
@@ -221,7 +221,7 @@ int RemoteShard::check_sync() {
     ThreadLocal &thl = thread_data[GetThreadID()];
     double load_fac = load_factor();
     uint64_t bins = tl.hash_table->metadata.bins;
-    
+
     thl.cnt.fetch_add(1, std::memory_order_relaxed);
     uint64_t sync_cnt = SYNC_T * (RESIZE_THR > load_fac ? RESIZE_THR - load_fac : 0);
     if (thl.cnt.load(std::memory_order_relaxed) >= sync_cnt) {
@@ -230,7 +230,7 @@ int RemoteShard::check_sync() {
             int64_t lv1_cnt = thl.lv1_cnt.exchange(0, std::memory_order_relaxed);
             int64_t lv2_cnt = thl.lv2_cnt.exchange(0, std::memory_order_relaxed);
             int64_t lv3_cnt = thl.lv3_cnt.exchange(0, std::memory_order_relaxed);
-            
+
             int64_t &lv1_balls = tl.hash_table->lv1_balls;
             int64_t &lv2_balls = tl.hash_table->lv2_balls;
             int64_t &lv3_balls = tl.hash_table->lv3_balls;
@@ -351,7 +351,7 @@ int RemoteShard::read_slot_group(uint64_t block, uint64_t offset, int id) {
         return read_lv2_slot_group(block, offset, id - 1);
     }
 }
-    
+
 bool RemoteShard::move_lv1_bin(uint64_t block, uint64_t offset, Slot *slot_group) {
     TaskLocal &tl = tl_data_[GetThreadID()][GetTaskID()];
     HashTable *hash_table = tl.hash_table;
@@ -384,7 +384,7 @@ bool RemoteShard::move_lv1_bin(uint64_t block, uint64_t offset, Slot *slot_group
         if (!(slot.bid & (1 << resize_bit))) continue; // should not move
         cnt++;
         // TODO: if resize_bit == 3
-        
+
         new_slot_group[i] = slot_group[i];
         slot_group[i].raw = 0;
         slot_group[i].lock = new_slot_group[i].lock;
@@ -438,7 +438,7 @@ bool RemoteShard::move_lv2_bin(uint64_t block, uint64_t offset, Slot *slot_group
         if (!slot.len) continue;
         if (!(slot.bid & (1 << resize_bit))) continue; // should not move
         // TODO: if resize_bit == 3
-        
+
         new_slot_group[i] = slot_group[i];
         slot_group[i].raw = 0;
         slot_group[i].lock = new_slot_group[i].lock;
@@ -457,7 +457,7 @@ bool RemoteShard::move_lv2_bin(uint64_t block, uint64_t offset, Slot *slot_group
     rc = node_->sync();
     assert(!rc);
 #endif
-    
+
     return true;
 }
 
@@ -617,7 +617,7 @@ int RemoteShard::search_bins_blocking(const std::string &key, std::string &value
     //     read_slot_group(block, offset, id);
     //     return search_bin(key, value, slot_group, slots, slot, fp);
     // }
-    
+
     if (block < resize_cnt) {
         read_slot_group(block, offset, id);
         if (!slot_group[LOCK_ID].lock && slot_group[DIRTY_ID].lock != (resize_cnt & 1)) {
@@ -749,7 +749,7 @@ int RemoteShard::search(const std::string &key, std::string &value) {
     if (read_handover) {
         goto search_finish;
     }
-    
+
     split_hash_result(hash1, hash_table->metadata.log_bins, LOG_SLOTS, bin, block, offset, slot, fp);
 #ifdef IS_BLOCKING
     if (search_bins_blocking(key, value, 0, LV1_SLOTS, bin, block, offset, slot, fp) == 0) goto search_finish;
@@ -1508,7 +1508,7 @@ int RemoteShard::update(const std::string &key, const std::string &value) {
     write_block(key, value, fp, b_id, new_slot);
     lv1_bin_addr = hash_table->lv1_bin[block] + offset * sizeof(Lv1Bin);
     // SDS_INFO("%ld %ld %ld %ld %d", bin,slot,block,offset, fp);
-    
+
 #ifdef IS_BLOCKING
     if (block < resize_cnt) {
         read_lv1_slot_group(block, offset);
@@ -1571,7 +1571,7 @@ int RemoteShard::update(const std::string &key, const std::string &value) {
 
     if (!slot_group[OVERFLOW_ID].lock)
         return 0;
-    
+
     // level2
     uint64_t hash2[CHOICE];
     uint8_t b_id2[CHOICE];
@@ -1661,7 +1661,7 @@ int RemoteShard::rmw(const std::string &key, const std::function<std::string(con
 
     while (true) {
         std::string old_value;
-        
+
         auto value = transform(old_value);
         GlobalAddress addr;
         write_block(key, value, 0, 0, new_slot, addr);
@@ -1886,7 +1886,7 @@ int RemoteShard::remove(const std::string &key) {
     uint8_t fp, b_id;
     uint64_t pre_log_bins = LOG_BINS + ROUND_UP(hash_table->metadata.log_bins - LOG_BINS);
     Slot *slot_group;
-    
+
     // level2
     uint64_t hash2[CHOICE];
     uint8_t b_id2[CHOICE];
@@ -1967,7 +1967,7 @@ int RemoteShard::remove(const std::string &key) {
     split_bin(bin & ((1 << hash_table->metadata.log_bins) - 1), LOG_BINS, block, offset);
     lv1_bin_addr = hash_table->lv1_bin[block] + offset * sizeof(Lv1Bin);
     // SDS_INFO("%ld %ld %ld %ld %d", bin,slot,block,offset, fp);
-    
+
 #ifdef IS_BLOCKING
     if (block < resize_cnt) {
         read_lv1_slot_group(block, offset);
@@ -2045,7 +2045,7 @@ int RemoteShard::resize() {
     uint64_t new_bins = bins << 1;
     uint64_t new_log_bins = log_bins + 1;
     uint64_t new_resize_cnt = resize_cnt + 1;
-    
+
 
     uint64_t lv1_bin_size = bins * sizeof(Lv1Bin);
     uint64_t lv2_bin_size = bins * sizeof(Lv2Bin);
@@ -2071,17 +2071,21 @@ int RemoteShard::resize() {
     SDS_INFO("resize: %d %d %ld %ld %ld", GetThreadID(), GetTaskID(),
             tl.hash_table->metadata.bins, tl.hash_table->metadata.log_bins, tl.hash_table->metadata.resize_cnt);
 
-    // wait until all other task sync metadata
-    BackoffGuard guard(tl_backoff);
-    while (true) {
-        addr = ht_addr_ + offsetof(HashTable, sync_tasks);
-        addr.node = 0;
-        rc = node_->read(tl.cas_buf, addr, sizeof(uint64_t), Initiator::Option::Sync);
-        // SDS_INFO("%ld %ld", *tl.cas_buf, tl.hash_table->tasks);
-        if (*tl.cas_buf >= tl.hash_table->tasks - 1) break;
-        // guard.retry_task();
+    // Hack for single-threaded bulk load on the main thread: allow thread 0 / task 0
+    // to proceed without waiting for other participants to observe the resize.
+    if (!(GetThreadID() == 0)) {
+        // wait until all other task sync metadata
+        BackoffGuard guard(tl_backoff);
+        while (true) {
+            addr = ht_addr_ + offsetof(HashTable, sync_tasks);
+            addr.node = 0;
+            rc = node_->read(tl.cas_buf, addr, sizeof(uint64_t), Initiator::Option::Sync);
+            // SDS_INFO("%ld %ld", *tl.cas_buf, tl.hash_table->tasks);
+            if (*tl.cas_buf >= tl.hash_table->tasks - 1) break;
+            // guard.retry_task();
+        }
     }
-    
+
     // after this, other operation can sync
     // begin to move bins
     /*
@@ -2106,7 +2110,7 @@ int RemoteShard::resize() {
                     if (old_slot.raw == *((uint64_t *)old_data_buf_))  break;
                 }
                 if (!old_slot.raw) continue;
-                
+
                 BlockHeader *block = tl.block_buf;
                 uint64_t block_len = new_slot.len * BLOCK_UNIT;
                 do {
@@ -2167,7 +2171,7 @@ int RemoteShard::resize() {
                     if (old_slot.raw == *((uint64_t *)old_data_buf_))  break;
                 }
                 if (!old_slot.raw) continue;
-                
+
                 BlockHeader *block = tl.block_buf;
                 uint64_t block_len = new_slot.len * BLOCK_UNIT;
                 do {
